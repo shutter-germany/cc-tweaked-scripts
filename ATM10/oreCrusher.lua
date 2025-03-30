@@ -7,15 +7,17 @@ bufferChest = peripheral.wrap("right")
 inputChestName = peripheral.getName(inputChest)
 bufferChestName = peripheral.getName(bufferChest)
 
-minStackSize = 8
-factorSeconds = 2
-factorRedstoneToAmount = 4.267
-cooldownInSeconds = 20
+minStackSize = 9                -- Threshold of stack size of an item that should be there till it gets moved
+minItemAmount = 8               -- Threshold of how big the stack of an item should be kept and NOT be moved
+factorSeconds = 2               -- Time in seconds how long the crusher takes to process one item
+factorRedstoneToAmount = 4.267  -- Factor for "comparator" calculation as it just provide a max of 15, so we need to multiply the factor to the current redstone level of get a rough idea of the current stack size the crusher is handling right now
+cooldownInSeconds = 20          -- How long should the script pause till it checks the input chest again after the recent check failed
+maxGapsSortingValidation = 5    -- After how many perpetuate empty slots the resort check should discontinue
 
 function getFirstItem()
     for i = 1, inputChest.size() do
         currentSlotItem = inputChest.getItemDetail(i)
-        if (nil ~= currentSlotItem and currentSlotItem.count >= minStackSize) then
+        if (nil ~= currentSlotItem and currentSlotItem.count >= minStackSize + minItemAmount) then
             return i
         end
     end
@@ -24,6 +26,7 @@ function getFirstItem()
 end
 
 function resortInputChest()
+    local perpetuateEmptySlots = 0
     for i = 1, inputChest.size() do
         if (i == inputChest.size()) then
             break
@@ -40,6 +43,8 @@ function resortInputChest()
         local currentItemName = "empty"
         if (nil ~= currentItem) then
             currentItemName = currentItem.name
+        else
+            perpetuateEmptySlots = perpetuateEmptySlots + 1
         end
 
         local nextItemName = "empty"
@@ -47,6 +52,10 @@ function resortInputChest()
             nextItemName = nextItem.name
         end
         print(utils.printf("Current Item: %s, next one: %s", currentItemName, nextItemName))
+
+        if (perpetuateEmptySlots >= maxGapsSortingValidation) then
+            break
+        end
     end
 
 end
@@ -60,10 +69,17 @@ while (true) do
         local slot = getFirstItem()
         print(utils.printf("moving from slot %d", slot))
         if (0 ~= slot) then
-            inputChest.pushItems(peripheral.getName(outputChest), slot)
-            resortInputChest()
+            item = inputChest.getItemDetail(slot)
+            amount = item.count
+            if (minItemAmount > 0 and minStackSize > 1) then
+                amount = amount - minStackSize
+            end
+            if (amount == item.count) then -- there will be gaps otherwise
+                resortInputChest()
+            end
+            inputChest.pushItems(peripheral.getName(outputChest), slot, amount)
         else
-            print(utils.printf("Input is empty or the stack is not larger as %d items", minStackSize))
+            print(utils.printf("Input is empty or the stack is not larger as %d items", minStackSize + minItemAmount))
         end
     end
 
